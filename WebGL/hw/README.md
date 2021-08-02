@@ -16,7 +16,7 @@
 
 **运行截图**：
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222605583.png" alt="image-20210629222605583" style="zoom: 33%;" />
+![avator](pics/task1.png)
 
 ------
 
@@ -32,11 +32,11 @@ task2-1为自动旋转的三维彩色立方体，task2-2为旋转立起来的五
 
 **运行截图**：
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222628607.png" alt="image-20210629222628607" style="zoom: 50%;" />
+![avator](pics/task2-1.png)
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222704788.png" alt="image-20210629222704788" style="zoom:50%;" />
+![avator](pics/task2-2.png)
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222752955.png" alt="image-20210629222752955" style="zoom:50%;" />
+![avator](pics/task2-3.png)
 
 ------
 
@@ -60,9 +60,9 @@ task3-shadow中，建立两对着色器，把深度纹理附加到帧缓冲上�
 
 **运行截图**：
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222838681.png" alt="image-20210629222838681" style="zoom: 50%;" />
+![avator](pics/task3-1.png)
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222906971.png" alt="image-20210629222906971" style="zoom:50%;" />
+![avator](pics/task3-2.png)
 
 ------
 
@@ -80,5 +80,5 @@ task3-shadow中，建立两对着色器，把深度纹理附加到帧缓冲上�
 
 **运行截图**：
 
-<img src="C:\Users\sentor\AppData\Roaming\Typora\typora-user-images\image-20210629222933129.png" alt="image-20210629222933129" style="zoom:50%;" />
+![avator](pics/task4.png)
 
