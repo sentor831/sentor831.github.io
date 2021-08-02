@@ -1,0 +1,677 @@
+<canvas id="canvas" width="1080" height="540"></canvas>
+<div id="ui"></div>
+<title>Task 4</title>
+
+<!-- vertex shader -->
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+attribute vec2 a_texcoord;
+attribute vec3 a_normal;
+
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_world;
+
+varying vec4 v_color;
+varying vec2 v_texcoord;
+varying vec3 v_worldPosition;
+varying vec3 v_worldNormal;
+
+void main() {
+
+    gl_Position = u_projection * u_view * u_world * a_position;
+
+    v_texcoord = a_texcoord;
+
+    v_color = a_color;
+
+    v_worldPosition = (u_world * a_position).xyz;
+    
+    // 重定向法向量
+    v_worldNormal = mat3(u_world) * a_normal;
+}
+</script>
+
+<!-- fragment shader -->
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision highp float;
+
+uniform sampler2D u_texture2D;
+uniform int u_obj;
+uniform samplerCube u_textureCube;
+uniform vec3 u_worldCameraPosition;
+
+varying vec4 v_color;
+varying vec2 v_texcoord;
+varying vec3 v_worldPosition;
+varying vec3 v_worldNormal;
+
+void main() {
+    vec3 worldNormal = normalize(v_worldNormal);
+    vec3 eyeToSurfaceDir = normalize(v_worldPosition - u_worldCameraPosition);
+    vec3 direction = reflect(eyeToSurfaceDir, worldNormal);
+    
+    if (u_obj == 0) {
+        gl_FragColor = textureCube(u_textureCube, direction);
+    } else if (u_obj == 1) {
+        gl_FragColor = texture2D(u_texture2D, v_texcoord);
+    } else {
+        gl_FragColor = v_color;
+    }
+}
+</script>
+<script src="./resources/webgl-lessons-ui.js"></script>
+<script src="./resources/webgl-utils.js"></script>
+<script src="./resources/m4_1.js"></script>
+<script src="./resources/m4.js"></script>
+<script src="./resources/MV.js"></script>
+<script>
+"use strict";
+
+var numTimesToSubdivide = 4;
+var index = 0;
+var pointsArray = [];
+var normalsArray = [];
+var colorArray = [];
+
+var va = vec4(0.0, 0.0, -1.0, 1);
+var vb = vec4(0.0, 0.942809, 0.333333, 1);
+var vc = vec4(-0.816497, -0.471405, 0.333333, 1);
+var vd = vec4(0.816497, -0.471405, 0.333333,1);
+
+function main() {
+    // Get A WebGL context
+    /** @type {HTMLCanvasElement} */
+    var canvas = document.querySelector("#canvas");
+    var gl = canvas.getContext("webgl");
+    if (!gl) {
+        alert('Unable to initialize WebGL. Your browser or machine may not support it.');
+        return;
+    }
+
+    // setup GLSL program
+    var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+    // attribute
+    var positionLocation = gl.getAttribLocation(program, "a_position");
+    var colorLocation = gl.getAttribLocation(program, "a_color");
+    var texcoordLocation = gl.getAttribLocation(program, "a_texcoord");
+    var normalLocation = gl.getAttribLocation(program, "a_normal");
+
+    // uniform
+    var projectionLocation = gl.getUniformLocation(program, "u_projection");
+    var viewLocation = gl.getUniformLocation(program, "u_view");
+    var worldLocation = gl.getUniformLocation(program, "u_world");
+    var objLocation = gl.getUniformLocation(program, "u_obj");
+    var texture2DLocation = gl.getUniformLocation(program, "u_texture2D");
+    var textureCubeLocation = gl.getUniformLocation(program, "u_textureCube");
+    var worldCameraPositionLocation = gl.getUniformLocation(program, "u_worldCameraPosition");
+
+    const settings = {
+        cameraX: 0,
+        cameraY: 1,
+        cameraZ: 2.7,
+    };
+
+    webglLessonsUI.setupUI(document.querySelector('#ui'), settings, [
+        { type: 'slider', key: 'cameraX', min: -10, max: 10, change: drawScene, precision: 2, step: 0.001, },
+    ]);
+
+    function degToRad(d) {
+        return d * Math.PI / 180;
+    }
+
+    const fieldOfViewRadians = degToRad(50);
+
+    tetrahedron(va, vb, vc, vd, numTimesToSubdivide);
+
+    var positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    setGeometry(gl);
+
+    var colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    setColors(gl);
+
+    var normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    setNormals(gl);
+
+    var texcoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+    setTexcoords(gl);
+
+    const faceInfos = [
+    {
+        target: gl.TEXTURE_CUBE_MAP_POSITIVE_X, 
+        url: 'resources/pos-x.png',
+    },
+    {
+        target: gl.TEXTURE_CUBE_MAP_NEGATIVE_X, 
+        url: 'resources/neg-x.png',
+    },
+    {
+        target: gl.TEXTURE_CUBE_MAP_POSITIVE_Y, 
+        url: 'resources/pos-y.png',
+    },
+    {
+        target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Y, 
+        url: 'resources/neg-y.png',
+    },
+    {
+        target: gl.TEXTURE_CUBE_MAP_POSITIVE_Z, 
+        url: 'resources/pos-z.png',
+    },
+    {
+        target: gl.TEXTURE_CUBE_MAP_NEGATIVE_Z, 
+        url: 'resources/neg-z.png',
+    }
+    ];
+
+    // 开启0号纹理单元
+    gl.activeTexture(gl.TEXTURE0);
+
+    var texture2D = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture2D);
+
+    // 用 1x1 个白色像素填充纹理
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+
+    // 加载图像
+    var image = new Image();
+    image.src = "./resources/pic.png";
+    image.addEventListener('load', function() {
+        // 拷贝到纹理
+        gl.bindTexture(gl.TEXTURE_2D, texture2D);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,gl.UNSIGNED_BYTE, image);
+
+        // 检查每个维度是否是2的幂次方
+        if (isPowerOf2(image.width) && isPowerOf2(image.height)) {
+            // 是 一般用贴图
+            gl.generateMipmap(gl.TEXTURE_2D);
+        } else {
+            // 不是 关闭贴图并设置包裹模式为到边缘
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        }
+    });
+
+    function isPowerOf2(value) {
+        return (value & (value - 1)) === 0;
+    }
+
+    // 开启1号纹理单元
+    gl.activeTexture(gl.TEXTURE1);
+
+    var textureCube = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, textureCube);
+    
+    faceInfos.forEach((faceInfo) => {
+        const {target, url} = faceInfo;
+        
+        // 上传画布到立方体贴图的每个面
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const width = 256;
+        const height = 256;
+        const format = gl.RGBA;
+        const type = gl.UNSIGNED_BYTE;
+        
+        // 设置每个面，使其立即可渲染
+        gl.texImage2D(target, level, internalFormat, width, height, 0, format, type, null);
+        
+        // 加载图像
+        var image = new Image();
+        image.src = url;
+        image.addEventListener('load', function() {
+            // 拷贝到纹理
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, textureCube);
+            gl.texImage2D(target, level, internalFormat, format, type, image);
+            gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+        });
+    });
+    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+    gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+
+    var cubeTranslation    = [425, 250, 0];
+    var starInTranslation  = [-200, 250, 0];
+    var sphereTranslation  = [1050, 250, 0];
+
+    function computeMatrix(viewProjectionMatrix, translation, xRotation, yRotation, zRotation) {
+        var matrix = m4_1.translate(viewProjectionMatrix,
+            translation[0],
+            translation[1],
+            translation[2]);
+        matrix = m4_1.xRotate(matrix, xRotation);
+        matrix = m4_1.xRotate(matrix, yRotation);
+        return m4_1.yRotate(matrix, zRotation);
+    }
+
+    requestAnimationFrame(drawScene);
+        
+    function drawScene(time) {
+        time *= 0.0005;
+
+        webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+
+        // Tell WebGL how to convert from clip space to pixels
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+        // gl.enable(gl.CULL_FACE);
+        gl.enable(gl.DEPTH_TEST);
+        gl.clearColor(0.0, 0.0, 0.0, 0.5);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        
+        // use program
+        gl.useProgram(program);
+
+        gl.enableVertexAttribArray(positionLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.enableVertexAttribArray(colorLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.vertexAttribPointer(colorLocation, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+
+        gl.enableVertexAttribArray(normalLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
+
+        gl.enableVertexAttribArray(texcoordLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+        gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+        
+        var matrix = m4_1.projection(gl.canvas.clientWidth, gl.canvas.clientHeight, 500);
+
+        // projection matrix
+        const projectionMatrix = m4.perspective(fieldOfViewRadians, gl.canvas.clientWidth / gl.canvas.clientHeight, 1, 2000);
+
+        // camera's matrix
+        const cameraPosition = [settings.cameraX, settings.cameraY, settings.cameraZ];
+        const target = [0, 0, 0];
+        const up = [0, 1, 0];
+        const cameraMatrix = m4.lookAt(cameraPosition, target, up);
+        
+        // view matrix
+        var viewMatrix = m4.inverse(cameraMatrix);
+        
+        gl.uniformMatrix4fv(projectionLocation, false, projectionMatrix);
+        gl.uniformMatrix4fv(viewLocation, false, viewMatrix);
+        gl.uniform3fv(worldCameraPositionLocation, cameraPosition);
+        
+        // 告诉着色器使用纹理单元0和1
+        gl.uniform1i(texture2DLocation, 0);
+        gl.uniform1i(textureCubeLocation, 1);
+
+        // draw
+        // cube
+        var moveOriginMatrix = m4_1.translation(-75*2, -75*2, -75*2);
+        var matrix1 = computeMatrix(matrix, cubeTranslation, 0.5*time, 0.5*time, 0.5*time);
+        matrix1 = m4_1.multiply(matrix1, moveOriginMatrix);
+        matrix1 = m4_1.scale(matrix1, 2, 2, 2);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix1);
+        gl.uniform1i(objLocation, 0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+        // starInside
+        var matrix2 = computeMatrix(matrix, starInTranslation, 0, time, 0);
+        matrix2 = m4_1.scale(matrix2, 2, -2, -2);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix2);
+        gl.uniform1i(objLocation, 1);
+
+        gl.drawArrays(gl.TRIANGLES, 36, 6);
+
+        gl.uniform1i(objLocation, 2);
+
+        gl.drawArrays(gl.TRIANGLES, 36+6, 3);
+
+        // starOutside
+        gl.drawArrays(gl.LINE_LOOP, 36+5+4, 5);
+
+        // sphere
+        var matrix3 = computeMatrix(matrix, sphereTranslation, time, time, time);
+        matrix3 = m4_1.scale(matrix3, 6, 6, 6);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix3);
+
+        for (var i = 0; i < index; i += 3) 
+            gl.drawArrays(gl.TRIANGLES, 36+5+4+5+i, 3);
+        
+        requestAnimationFrame(drawScene);
+    }
+}
+
+// vertex
+function setGeometry(gl) {
+    var theTwo = [   
+        // 正面
+        0, 0, 0,
+        0, 150, 0,
+        150, 0, 0,
+        0, 150, 0,
+        150, 150, 0,
+        150, 0, 0,
+
+        // 背面
+        0, 0, 150,
+        150, 0, 150,
+        0, 150, 150,
+        0, 150, 150,
+        150, 0, 150,
+        150, 150, 150,
+
+        // 顶面
+        0, 0, 0,
+        150, 0, 0,
+        150, 0, 150,
+        0, 0, 0,
+        150, 0, 150,
+        0, 0, 150,
+
+        // 右侧
+        150, 0, 0,
+        150, 150, 0,
+        150, 150, 150,
+        150, 0, 0,
+        150, 150, 150,
+        150, 0, 150,
+
+        // 底面
+        0, 150, 0,
+        0, 150, 150,
+        150, 150, 150,
+        0, 150, 0,
+        150, 150, 150,
+        150, 150, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 150,
+        0, 150, 150,
+        0, 0, 0,
+        0, 150, 150,
+        0, 150, 0,
+
+        // starInside
+        Math.cos((54 + 0 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 0 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 1 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 1 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 4 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 4 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 1 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 1 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 2 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 2 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 4 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 4 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 2 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 2 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 3 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 3 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 4 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 4 * 72) / 180 * Math.PI) * 60, 0,
+
+        // starOutside
+        Math.cos((18 + 0 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 0 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 1 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 1 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 2 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 2 * 144) / 180 * Math.PI) * 160, 0, 
+        Math.cos((18 + 3 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 3 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 4 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 4 * 144) / 180 * Math.PI) * 160, 0,
+    ]; 
+    var points = theTwo.concat(pointsArray);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.STATIC_DRAW);
+}
+
+// color
+function setColors(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 0,
+        0, 255, 0,
+        255, 0, 0,
+        0, 255, 0,
+        255, 255, 0,
+        255, 0, 0,
+
+        // 背面
+        0, 0, 255,
+        255, 0, 255,
+        0, 255, 255,
+        0, 255, 255,
+        255, 0, 255,
+        255, 255, 255,
+
+        // 顶面
+        0, 0, 0,
+        255, 0, 0,
+        255, 0, 255,
+        0, 0, 0,
+        255, 0, 255,
+        0, 0, 255,
+
+        // 右侧
+        255, 0, 0,
+        255, 255, 0,
+        255, 255, 255,
+        255, 0, 0,
+        255, 255, 255,
+        255, 0, 255,
+
+        // 底面
+        0, 255, 0,
+        0, 255, 255,
+        255, 255, 255,
+        0, 255, 0,
+        255, 255, 255,
+        255, 255, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 255,
+        0, 255, 255,
+        0, 0, 0,
+        0, 255, 255,
+        0, 255, 0,
+
+        // starInside
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+
+        // starOutside
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+    ];
+    var color = theTwo.concat(colorArray);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(color), gl.STATIC_DRAW);
+}
+
+// normal
+function setNormals(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+
+        // 背面
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+
+        // 顶面
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+
+        // 右侧
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+
+        // 底面
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+
+        // 左侧
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+
+        // starInside
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+
+        // starOutside
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+    ];
+    var normal = theTwo.concat(normalsArray);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normal), gl.STATIC_DRAW);
+}
+
+function setTexcoords(gl) {
+    gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([
+            // 正面
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+
+            // 背面
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+
+            // 顶面
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+
+            // 右侧
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+
+            // 底面
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+
+            // 左侧
+            0, 0,
+            0, 1,
+            1, 0,
+            0, 1,
+            1, 1,
+            1, 0,
+            // 以上都不重要
+
+            1, 0,
+            0, 0,
+            1, 1,
+            0, 0,
+            0, 1,
+            1, 1,
+        ]),
+       gl.STATIC_DRAW);
+}
+
+function triangle(a, b, c) {
+    pointsArray.push(a[0] * 20, a[1] * 20, a[2] * 20);
+    pointsArray.push(b[0] * 20, b[1] * 20, b[2] * 20);
+    pointsArray.push(c[0] * 20, c[1] * 20, c[2] * 20);
+
+    normalsArray.push(a[0] * 20, a[1] * 20, a[2] * 20);
+    normalsArray.push(b[0] * 20, b[1] * 20, b[2] * 20);
+    normalsArray.push(c[0] * 20, c[1] * 20, c[2] * 20);
+
+    // color
+    colorArray.push(0, 211, 211);
+    colorArray.push(211, 0, 211);
+    colorArray.push(211, 211, 0);
+
+    index += 3;
+}
+
+function divideTriangle(a, b, c, count) {
+    if ( count > 0 ) {
+
+        var ab = mix( a, b, 0.5);
+        var ac = mix( a, c, 0.5);
+        var bc = mix( b, c, 0.5);
+
+        ab = normalize(ab, true);
+        ac = normalize(ac, true);
+        bc = normalize(bc, true);
+
+        divideTriangle( a, ab, ac, count - 1 );
+        divideTriangle( ab, b, bc, count - 1 );
+        divideTriangle( bc, c, ac, count - 1 );
+        divideTriangle( ab, bc, ac, count - 1 );
+    }
+    else {
+        triangle( a, b, c );
+    }
+}
+
+function tetrahedron(a, b, c, d, n) {
+    divideTriangle(a, b, c, n);
+    divideTriangle(d, c, b, n);
+    divideTriangle(a, d, b, n);
+    divideTriangle(a, c, d, n);
+}
+
+main();
+</script>

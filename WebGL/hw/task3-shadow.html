@@ -1,0 +1,590 @@
+<canvas id="canvas" width="1080" height="540"></canvas>
+<div id="ui"></div>
+<title>Task 3-shadow</title>
+
+<!-- vertex shader -->
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_world;
+uniform mat4 u_textureMatrix;
+
+varying vec4 v_color;
+varying vec4 v_projectedTexcoord;
+
+void main() {
+    vec4 worldPosition = u_world * a_position;
+
+    gl_Position = u_projection * u_view * worldPosition;
+
+    v_color = a_color;
+
+    v_projectedTexcoord = u_textureMatrix * worldPosition;
+}
+</script>
+
+<!-- fragment shader -->
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+
+varying vec4 v_color;
+varying vec4 v_projectedTexcoord;
+
+uniform sampler2D u_projectedTexture;
+uniform float u_bias;
+
+void main() {
+    gl_FragColor = v_color;
+
+    vec3 projectedTexcoord = v_projectedTexcoord.xyz / v_projectedTexcoord.w;
+    float currentDepth = projectedTexcoord.z + u_bias;
+    bool inRange =
+        projectedTexcoord.x >= 0.0 &&
+        projectedTexcoord.x <= 1.0 &&
+        projectedTexcoord.y >= 0.0 &&
+        projectedTexcoord.y <= 1.0;
+
+    // the 'r' channel has the depth values
+    float projectedDepth = texture2D(u_projectedTexture, projectedTexcoord.xy).r;
+    float shadowLight = (!inRange || projectedDepth > currentDepth) ? 0.8 : 1.0;
+    
+    gl_FragColor.rgb = gl_FragColor.rgb * shadowLight;
+    
+}
+</script>
+<!-- vertex shader -->
+<script  id="color-vertex-shader" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_world;
+
+varying vec4 v_color;
+
+void main() {
+    gl_Position = u_projection * u_view * u_world * a_position;
+
+    v_color = a_color;
+    v_color.a = 1.0;
+}
+</script>
+<!-- fragment shader -->
+<script  id="color-fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+
+varying vec4 v_color;
+
+void main() {
+    gl_FragColor = v_color;
+}
+</script>
+<script src="./resources/webgl-lessons-ui.js"></script>
+<script src="./resources/webgl-utils.js"></script>
+<script src="./resources/m4_1.js"></script>
+<script src="./resources/m4.js"></script>
+<script src="./resources/MV.js"></script>
+<script>
+"use strict";
+
+var numTimesToSubdivide = 4;
+var index = 0;
+var pointsArray = [];
+var colorArray = [];
+
+var va = vec4(0.0, 0.0, -1.0, 1);
+var vb = vec4(0.0, 0.942809, 0.333333, 1);
+var vc = vec4(-0.816497, -0.471405, 0.333333, 1);
+var vd = vec4(0.816497, -0.471405, 0.333333,1);
+
+// 环境光 漫反射 镜面反射
+var lightAmbient = vec4(0.2, 0.2, 0.2, 1.0);
+var lightDiffuse = vec4(1.0, 1.0, 1.0, 1.0);
+var lightSpecular = vec4(1.0, 1.0, 1.0, 1.0);
+
+// 环境光反射系数 漫反射系数 镜面反射系数 高光系数
+var materialAmbient = vec4(1.0, 0.0, 1.0, 1.0);
+var materialDiffuse = vec4(1.0, 0.8, 0.5, 1.0);
+var materialSpecular = vec4(1.0, 1.0, 1.0, 1.0);
+var materialShininess = 20.0;
+
+function main() {
+    // Get A WebGL context
+    /** @type {HTMLCanvasElement} */
+    const canvas = document.querySelector("#canvas");
+    const gl = canvas.getContext("webgl");
+    if (!gl) {
+        alert('Unable to initialize WebGL. Your browser or machine may not support it.');
+        return;
+    }
+    const ext = gl.getExtension('WEBGL_depth_texture');
+    if (!ext) {
+        return alert('need WEBGL_depth_texture');  // eslint-disable-line
+    }
+
+    // setup GLSL program
+    var shadowProgram = webglUtils.createProgramFromScripts(gl, ["color-vertex-shader", "color-fragment-shader"]);
+    
+    // attribute
+    var shadowPositionLocation = gl.getAttribLocation(shadowProgram, "a_position");
+    var shadowColorLocation = gl.getAttribLocation(shadowProgram, "a_color");
+
+    // uniform
+    var shadowProjectionLocation = gl.getUniformLocation(shadowProgram, "u_projection");
+    var shadowViewLocation = gl.getUniformLocation(shadowProgram, "u_view");
+    var shadowWorldLocation = gl.getUniformLocation(shadowProgram, "u_world");
+
+    // setup GLSL program
+    var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+    // attribute
+    var positionLocation = gl.getAttribLocation(program, "a_position");
+    var colorLocation = gl.getAttribLocation(program, "a_color");
+
+    // uniform
+    var projectionLocation = gl.getUniformLocation(program, "u_projection");
+    var viewLocation = gl.getUniformLocation(program, "u_view");
+    var worldLocation = gl.getUniformLocation(program, "u_world");
+    var textureMatrixLocation = gl.getUniformLocation(program, "u_textureMatrix");
+
+    const depthTexture = gl.createTexture();
+    const depthTextureSize = 512;
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    gl.texImage2D(
+        gl.TEXTURE_2D,      // target
+        0,                  // mip level
+        gl.DEPTH_COMPONENT, // internal format
+        depthTextureSize,   // width
+        depthTextureSize,   // height
+        0,                  // border
+        gl.DEPTH_COMPONENT, // format
+        gl.UNSIGNED_INT,    // type
+        null);              // data
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    const depthFramebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, depthFramebuffer);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,       // target
+        gl.DEPTH_ATTACHMENT,  // attachment point
+        gl.TEXTURE_2D,        // texture target
+        depthTexture,         // texture
+        0);                   // mip level
+
+    // create a color texture of the same size as the depth texture
+    // see article why this is needed_
+    const unusedTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, unusedTexture);
+    gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        depthTextureSize,
+        depthTextureSize,
+        0,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        null,
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // attach it to the framebuffer
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,        // target
+        gl.COLOR_ATTACHMENT0,  // attachment point
+        gl.TEXTURE_2D,         // texture target
+        unusedTexture,         // texture
+        0);                    // mip level
+
+    const settings = {
+        cameraX: 0,
+        cameraY: 1,
+        cameraZ: 2.7,
+        posX: 2.5,
+        posY: 5,
+        posZ: 4.3,
+        targetX: 0,
+        targetY: 1,
+        targetZ: 0,
+        projWidth: 2,
+        projHeight: 0.5,
+        perspective: true,
+        fieldOfView: 8,
+        bias: -0.006,
+    };
+
+    webglLessonsUI.setupUI(document.querySelector('#ui'), settings, [
+        { type: 'slider', key: 'cameraX', min: -10, max: 10, change: drawScene, precision: 2, step: 0.001, },
+    ]);
+
+    function degToRad(d) {
+        return d * Math.PI / 180;
+    }
+
+    const fieldOfViewRadians = degToRad(50);
+    
+    // Recursive subdivision
+    tetrahedron(va, vb, vc, vd, numTimesToSubdivide);
+
+    var positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    setGeometry(gl);
+
+    var colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    setColors(gl);
+
+    var cubeTranslation    = [425, 250, 0];
+    var starInTranslation  = [-200, 250, 0];
+    var sphereTranslation  = [1050, 250, 0];
+    var planeTranslation   = [-1500, 200, -300];
+
+    var matrix = m4_1.projection(gl.canvas.clientWidth, gl.canvas.clientHeight, 500);
+    
+    const lightWorldMatrix = m4.lookAt(
+        [settings.posX, settings.posY, settings.posZ],          // position
+        [settings.targetX, settings.targetY, settings.targetZ], // target
+        [0, 1, 0],   
+    );
+
+    const lightProjectionMatrix = m4.perspective(
+            degToRad(settings.fieldOfView),
+            settings.projWidth / settings.projHeight,
+            0.5,  // near
+            10)   // far
+
+    var textureMatrix = m4.identity();
+    textureMatrix = m4.translate(textureMatrix, 0.5, 0.5, 0.5);
+    textureMatrix = m4.scale(textureMatrix, 0.5, 0.5, 0.5);
+    textureMatrix = m4.multiply(textureMatrix, lightProjectionMatrix);
+    textureMatrix = m4.multiply(textureMatrix, m4.inverse(lightWorldMatrix));
+
+    function computeMatrix(viewProjectionMatrix, translation, xRotation, yRotation, zRotation) {
+        var matrix = m4_1.translate(viewProjectionMatrix,
+            translation[0],
+            translation[1],
+            translation[2]);
+        matrix = m4_1.xRotate(matrix, xRotation);
+        matrix = m4_1.xRotate(matrix, yRotation);
+        return m4_1.yRotate(matrix, zRotation);
+    }
+    
+    requestAnimationFrame(drawScene);
+        
+    function drawScene(time) {
+        time *= 0.0005;
+
+        webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    
+        // gl.enable(gl.CULL_FACE);
+        gl.enable(gl.DEPTH_TEST);
+        gl.clearColor(0.0, 0.0, 0.0, 0.5);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, depthFramebuffer);
+        gl.viewport(0, 0, depthTextureSize, depthTextureSize);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // ----- shadowprogram -----
+        gl.useProgram(shadowProgram);
+
+        var viewMatrix = m4.inverse(lightWorldMatrix);
+
+        gl.uniformMatrix4fv(shadowProjectionLocation, false, lightProjectionMatrix);
+        gl.uniformMatrix4fv(shadowViewLocation, false, viewMatrix);
+
+        // starInside
+        var matrix2 = computeMatrix(matrix, starInTranslation, 0, time, 0);
+        matrix2 = m4_1.scale(matrix2, 1, -1, -1);
+        
+        gl.uniformMatrix4fv(shadowWorldLocation, false, matrix2);
+        
+        gl.drawArrays(gl.TRIANGLE_FAN, 36, 5);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // ----- program -----
+        gl.useProgram(program);
+
+        gl.enableVertexAttribArray(positionLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.enableVertexAttribArray(colorLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.vertexAttribPointer(colorLocation, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+        
+        // projection matrix
+        const projectionMatrix = m4.perspective(fieldOfViewRadians, gl.canvas.clientWidth / gl.canvas.clientHeight, 1, 2000);
+
+        // camera's matrix using
+        const cameraPosition = [settings.cameraX, settings.cameraY, settings.cameraZ];
+        const target = [0, 0, 0];
+        const up = [0, 1, 0];
+        const cameraMatrix = m4.lookAt(cameraPosition, target, up);
+
+        // view matrix
+        viewMatrix = m4.inverse(cameraMatrix);
+
+        gl.uniformMatrix4fv(viewLocation, false, viewMatrix);
+        gl.uniformMatrix4fv(projectionLocation, false, projectionMatrix);
+        gl.uniformMatrix4fv(textureMatrixLocation, false, textureMatrix);
+        gl.uniform1i(program.u_projectedTexture, depthTexture);
+
+        // draw
+        // cube
+        var moveOriginMatrix = m4_1.translation(-75, -75, -75);
+        var matrix1 = computeMatrix(matrix, cubeTranslation, time, time, time);
+        matrix1 = m4.multiply(matrix1, moveOriginMatrix);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix1);
+        
+        gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+        // starInside
+        var matrix2 = computeMatrix(matrix, starInTranslation, 0, time, 0);
+        matrix2 = m4_1.scale(matrix2, 1, -1, -1);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix2);
+
+        gl.drawArrays(gl.TRIANGLE_FAN, 36, 5);
+
+        // starOutside
+        gl.drawArrays(gl.LINE_LOOP, 36+5, 5);
+
+        // sphere
+        var matrix3 = computeMatrix(matrix, sphereTranslation, time, time, time);
+        matrix3 = m4_1.scale(matrix3, 6, 6, 6);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix3);
+
+        for (var i = 0; i < index; i += 3) 
+            gl.drawArrays(gl.TRIANGLES, 36+5+5+i, 3);
+
+        // plane
+        var matrix4 = computeMatrix(matrix, planeTranslation, 0, 0, 0);
+        matrix4 = m4_1.scale(matrix4, 1.5, 1.5, 1.5);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix4);
+        
+        gl.drawArrays(gl.TRIANGLES, 36+5+5+index, 6);
+
+        requestAnimationFrame(drawScene);
+    }
+}
+
+// vertex
+function setGeometry(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 0,
+        0, 150, 0,
+        150, 0, 0,
+        0, 150, 0,
+        150, 150, 0,
+        150, 0, 0,
+
+        // 背面
+        0, 0, 150,
+        150, 0, 150,
+        0, 150, 150,
+        0, 150, 150,
+        150, 0, 150,
+        150, 150, 150,
+
+        // 顶面
+        0, 0, 0,
+        150, 0, 0,
+        150, 0, 150,
+        0, 0, 0,
+        150, 0, 150,
+        0, 0, 150,
+
+        // 右侧
+        150, 0, 0,
+        150, 150, 0,
+        150, 150, 150,
+        150, 0, 0,
+        150, 150, 150,
+        150, 0, 150,
+
+        // 底面
+        0, 150, 0,
+        0, 150, 150,
+        150, 150, 150,
+        0, 150, 0,
+        150, 150, 150,
+        150, 150, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 150,
+        0, 150, 150,
+        0, 0, 0,
+        0, 150, 150,
+        0, 150, 0,
+
+        // starInside
+        Math.cos((54 + 0 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 0 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 1 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 1 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 2 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 2 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 3 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 3 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 4 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 4 * 72) / 180 * Math.PI) * 60, 0,
+
+        // starOutside
+        Math.cos((18 + 0 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 0 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 1 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 1 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 2 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 2 * 144) / 180 * Math.PI) * 160, 0, 
+        Math.cos((18 + 3 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 3 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 4 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 4 * 144) / 180 * Math.PI) * 160, 0,
+    ]; 
+    var points = theTwo.concat(pointsArray);
+    var plane = [
+        0, 200, -500,
+        0, 200, 500,
+        2300, 200, -500,
+        2300, 200, -500,
+        0, 200, 500,
+        2300, 200, 500,
+    ]
+    points = points.concat(plane);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.STATIC_DRAW);
+}
+
+// color
+function setColors(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 0,
+        0, 255, 0,
+        255, 0, 0,
+        0, 255, 0,
+        255, 255, 0,
+        255, 0, 0,
+
+        // 背面
+        0, 0, 255,
+        255, 0, 255,
+        0, 255, 255,
+        0, 255, 255,
+        255, 0, 255,
+        255, 255, 255,
+
+        // 顶面
+        0, 0, 0,
+        255, 0, 0,
+        255, 0, 255,
+        0, 0, 0,
+        255, 0, 255,
+        0, 0, 255,
+
+        // 右侧
+        255, 0, 0,
+        255, 255, 0,
+        255, 255, 255,
+        255, 0, 0,
+        255, 255, 255,
+        255, 0, 255,
+
+        // 底面
+        0, 255, 0,
+        0, 255, 255,
+        255, 255, 255,
+        0, 255, 0,
+        255, 255, 255,
+        255, 255, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 255,
+        0, 255, 255,
+        0, 0, 0,
+        0, 255, 255,
+        0, 255, 0,
+
+        // starInside
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+
+        // starOutside
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+    ];
+    var color = theTwo.concat(colorArray);
+    var plane = [
+        100, 100, 200,
+        100, 100, 200,
+        100, 100, 200,
+        100, 100, 200,
+        100, 100, 200,
+        100, 100, 200,
+    ];
+    color = color.concat(plane);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(color), gl.STATIC_DRAW);
+}
+
+function triangle(a, b, c) {
+    pointsArray.push(a[0] * 20, a[1] * 20, a[2] * 20);
+    pointsArray.push(b[0] * 20, b[1] * 20, b[2] * 20);
+    pointsArray.push(c[0] * 20, c[1] * 20, c[2] * 20);
+
+    // // black
+    // colorArray.push(0, 0, 0);
+    // colorArray.push(0, 0, 0);
+    // colorArray.push(0, 0, 0);
+
+    // color
+    colorArray.push(0, 211, 211);
+    colorArray.push(211, 0, 211);
+    colorArray.push(211, 211, 0);
+
+    index += 3;
+}
+
+function divideTriangle(a, b, c, count) {
+    if ( count > 0 ) {
+
+        var ab = mix( a, b, 0.5);
+        var ac = mix( a, c, 0.5);
+        var bc = mix( b, c, 0.5);
+
+        ab = normalize(ab, true);
+        ac = normalize(ac, true);
+        bc = normalize(bc, true);
+
+        divideTriangle( a, ab, ac, count - 1 );
+        divideTriangle( ab, b, bc, count - 1 );
+        divideTriangle( bc, c, ac, count - 1 );
+        divideTriangle( ab, bc, ac, count - 1 );
+    }
+    else {
+        triangle( a, b, c );
+    }
+}
+
+function tetrahedron(a, b, c, d, n) {
+    divideTriangle(a, b, c, n);
+    divideTriangle(d, c, b, n);
+    divideTriangle(a, d, b, n);
+    divideTriangle(a, c, d, n);
+}
+
+main();
+</script>

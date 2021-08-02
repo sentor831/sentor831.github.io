@@ -1,0 +1,597 @@
+<canvas id="canvas" width="1080" height="540"></canvas>
+<title>Task 3-light</title>
+<body>
+    <div id="uiContainer">
+        <div id="ui"></div>
+        <p> </p>
+        <button id = "Button6">取消环境光反射系数</button>
+        <button id = "Button7">复原环境光反射系数</button>
+        <p> </p>
+        <button id = "Button8">取消漫反射系数</button>
+        <button id = "Button9">复原漫反射系数</button>
+        <p> </p>
+        <button id = "Button10">取消镜面反射系数</button>
+        <button id = "Button11">复原镜面反射系数</button>
+        <p> </p>
+        <button id = "Button12">增大高光系数</button>
+        <button id = "Button13">减小高光系数</button>
+    </div>
+    <canvas id="canvas"></canvas>
+</body>
+
+<!-- vertex shader -->
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+attribute vec3 a_normal;
+
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_world;
+
+varying vec4 v_color;
+varying vec3 v_normal;
+
+void main() {
+
+    vec4 worldPosition = u_world * a_position;
+
+    gl_Position = u_projection * u_view * worldPosition;
+
+    // 重定向法向量
+    v_normal = mat3(u_world) * a_normal;
+
+    v_color = a_color;
+}
+</script>
+
+<!-- fragment shader -->
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+
+varying vec4 v_color;
+varying vec3 v_normal;
+
+uniform vec3 u_reverseLightDirection;
+uniform vec4 u_ambientProduct, u_diffuseProduct, u_specularProduct;
+uniform float u_shininess;
+
+
+vec4 lit(float l ,float h, float m) {
+    return vec4(1.0,
+                abs(l),
+                (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+                1.0);
+}
+
+void main() {
+    vec3 normal = normalize(v_normal);
+
+    float light = dot(normal, u_reverseLightDirection);
+
+    gl_FragColor = v_color;
+
+    vec3 halfVector = normalize(u_reverseLightDirection);
+
+    vec4 litR = lit(dot(normal, u_reverseLightDirection), dot(normal, halfVector), u_shininess);
+
+    // 漫反射分量
+    gl_FragColor.rgb += (u_diffuseProduct * litR.y).rgb;
+
+    // 镜面反射分量
+    gl_FragColor.rgb += (u_specularProduct * litR.z).rgb;
+
+    // 环境光反射分量
+    gl_FragColor.rgb += u_ambientProduct.rgb;
+
+    // 颜色分量与光照相乘
+    gl_FragColor.rgb *= light;
+    
+}
+</script>
+
+<script src="./resources/webgl-lessons-ui.js"></script>
+<script src="./resources/webgl-utils.js"></script>
+<script src="./resources/m4_1.js"></script>
+<script src="./resources/m4.js"></script>
+<script src="./resources/MV.js"></script>
+<script>
+"use strict";
+
+var numTimesToSubdivide = 4;
+var index = 0;
+var pointsArray = [];
+var normalsArray = [];
+var colorArray = [];
+
+var va = vec4(0.0, 0.0, -1.0, 1);
+var vb = vec4(0.0, 0.942809, 0.333333, 1);
+var vc = vec4(-0.816497, -0.471405, 0.333333, 1);
+var vd = vec4(0.816497, -0.471405, 0.333333,1);
+
+// 环境光分量 漫反射分量 镜面反射分量
+var lightAmbient = vec4(0.2, 0.2, 0.2, 1.0);
+var lightDiffuse = vec4(1.0, 1.0, 1.0, 1.0);
+var lightSpecular = vec4(1.0, 1.0, 1.0, 1.0);
+
+// 环境光反射系数 漫反射系数 镜面反射系数 高光系数
+var materialAmbient = vec4(1.0, 0.0, 1.0, 1.0);
+var materialDiffuse = vec4(1.0, 0.8, 0.5, 1.0);
+var materialSpecular = vec4(1.0, 1.0, 1.0, 1.0);
+var materialShininess = 20.0;
+
+function main() {
+    // Get A WebGL context
+    /** @type {HTMLCanvasElement} */
+    const canvas = document.querySelector("#canvas");
+    const gl = canvas.getContext("webgl");
+    if (!gl) {
+        alert('Unable to initialize WebGL. Your browser or machine may not support it.');
+        return;
+    }
+
+    // setup GLSL program
+    var program = webglUtils.createProgramFromScripts(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+    // attribute
+    var positionLocation = gl.getAttribLocation(program, "a_position");
+    var colorLocation = gl.getAttribLocation(program, "a_color");
+    var normalLocation = gl.getAttribLocation(program, "a_normal");
+
+    // uniform
+    var projectionLocation = gl.getUniformLocation(program, "u_projection");
+    var viewLocation = gl.getUniformLocation(program, "u_view");
+    var worldLocation = gl.getUniformLocation(program, "u_world");
+    var reverseLightDirectionLocation = gl.getUniformLocation(program, "u_reverseLightDirection");
+
+    const settings = {
+        cameraX: 0,
+        cameraY: 1,
+        cameraZ: 2.7,
+        lightX: 25,
+        lightY: 50,
+        lightZ: 43,
+    };
+
+    webglLessonsUI.setupUI(document.querySelector('#ui'), settings, [
+        { type: 'slider', key: 'cameraX', min: -10, max: 10, change: drawScene, precision: 2, step: 0.001, },
+        { type: 'slider', key: 'lightX', min: -100, max: 100, change: drawScene, precision: 2, step: 1, },
+        { type: 'slider', key: 'lightY', min: -100, max: 100, change: drawScene, precision: 2, step: 1, },
+        { type: 'slider', key: 'lightZ', min: -100, max: 100, change: drawScene, precision: 2, step: 1, },
+    ]);
+
+    function degToRad(d) {
+        return d * Math.PI / 180;
+    }
+
+    const fieldOfViewRadians = degToRad(50);
+    
+    // Recursive subdivision
+    tetrahedron(va, vb, vc, vd, numTimesToSubdivide);
+
+    var positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    setGeometry(gl);
+
+    var colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    setColors(gl);
+
+    var normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    setNormals(gl);
+
+    var cubeTranslation    = [425, 250, 0];
+    var starInTranslation  = [-200, 250, 0];
+    var sphereTranslation  = [1050, 250, 0];
+    var planeTranslation   = [-1500, 200, -300];
+
+    function computeMatrix(viewProjectionMatrix, translation, xRotation, yRotation, zRotation) {
+        var matrix = m4_1.translate(viewProjectionMatrix,
+            translation[0],
+            translation[1],
+            translation[2]);
+        matrix = m4_1.xRotate(matrix, xRotation);
+        matrix = m4_1.xRotate(matrix, yRotation);
+        return m4_1.yRotate(matrix, zRotation);
+    }
+
+    document.getElementById("Button6").onclick = function(){materialAmbient = vec4(0.0, 0.0, 0.0, 0.0)};
+    document.getElementById("Button7").onclick = function(){materialAmbient = vec4(1.0, 0.0, 1.0, 1.0);};
+    document.getElementById("Button8").onclick = function(){materialDiffuse = vec4(0.0, 0.0, 0.0, 0.0)};
+    document.getElementById("Button9").onclick = function(){materialDiffuse = vec4(1.0, 0.8, 0.5, 1.0);};
+    document.getElementById("Button10").onclick = function(){materialSpecular = vec4(0.0, 0.0, 0.0, 0.0)};
+    document.getElementById("Button11").onclick = function(){materialSpecular = vec4(1.0, 1.0, 1.0, 1.0);};
+    document.getElementById("Button12").onclick = function(){materialShininess += 10.0};
+    document.getElementById("Button13").onclick = function(){
+        materialShininess >= 10 ? materialShininess -= 10.0: materialShininess -= 0;};
+    
+    requestAnimationFrame(drawScene);
+        
+    function drawScene(time) {
+        
+        time *= 0.0005;
+
+        webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+
+        // Tell WebGL how to convert from clip space to pixels
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    
+        // gl.enable(gl.CULL_FACE);
+        gl.enable(gl.DEPTH_TEST);
+        gl.clearColor(0.0, 0.0, 0.0, 0.5);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // use program
+        gl.useProgram(program);
+
+        gl.enableVertexAttribArray(positionLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.enableVertexAttribArray(colorLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.vertexAttribPointer(colorLocation, 3, gl.UNSIGNED_BYTE, true, 0, 0);
+
+        gl.enableVertexAttribArray(normalLocation);
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+        gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0);
+
+        var ambientProduct = mult(lightAmbient, materialAmbient);
+        var diffuseProduct = mult(lightDiffuse, materialDiffuse);
+        var specularProduct = mult(lightSpecular, materialSpecular);
+
+        var matrix = m4_1.projection(gl.canvas.clientWidth, gl.canvas.clientHeight, 500);
+
+        // draw at the origin
+        var worldMatrix = m4.xRotation(0);
+
+        // projection matrix
+        const projectionMatrix = m4.perspective(fieldOfViewRadians, gl.canvas.clientWidth / gl.canvas.clientHeight, 1, 2000);
+
+        // camera's matrix
+        const cameraPosition = [settings.cameraX, settings.cameraY, settings.cameraZ];
+        const target = [0, 0, 0];
+        const up = [0, 1, 0];
+        const cameraMatrix = m4.lookAt(cameraPosition, target, up);
+
+        // view matrix
+        var viewMatrix = m4.inverse(cameraMatrix);
+        
+        gl.uniformMatrix4fv(projectionLocation, false, projectionMatrix);
+        gl.uniformMatrix4fv(viewLocation, false, viewMatrix);
+        gl.uniform4fv(gl.getUniformLocation(program, "u_ambientProduct"), flatten(ambientProduct));
+        gl.uniform4fv(gl.getUniformLocation(program, "u_diffuseProduct"), flatten(diffuseProduct));
+        gl.uniform4fv(gl.getUniformLocation(program, "u_specularProduct"), flatten(specularProduct));
+        gl.uniform1f(gl.getUniformLocation(program, "u_shininess"), materialShininess);
+
+        // draw
+        // cube
+        var moveOriginMatrix = m4_1.translation(-75, -75, -75);
+        var matrix1 = computeMatrix(matrix, cubeTranslation, time, time, time);
+        matrix1 = m4.multiply(matrix1, moveOriginMatrix);
+        matrix1 = m4.multiply(matrix1, worldMatrix);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix1);
+        gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([-settings.lightX, -settings.lightY, -settings.lightZ]));
+        gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+        // starInside
+        var matrix2 = computeMatrix(matrix, starInTranslation, 0, time, 0);
+        matrix2 = m4_1.scale(matrix2, 1, -1, -1);
+        matrix2 = m4.multiply(matrix2, worldMatrix);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix2);
+        gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([settings.lightX, settings.lightY, settings.lightZ]));
+
+        gl.drawArrays(gl.TRIANGLE_FAN, 36, 5);
+
+        // starOutside
+        gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([-settings.lightX, -settings.lightY, -settings.lightZ]));
+        gl.drawArrays(gl.LINE_LOOP, 36+5, 5);
+
+        // sphere
+        var matrix3 = computeMatrix(matrix, sphereTranslation, time, time, time);
+        matrix3 = m4_1.scale(matrix3, 6, 6, 6);
+        matrix3 = m4.multiply(matrix3, worldMatrix);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix3);
+        gl.uniform3fv(reverseLightDirectionLocation, m4.normalize([settings.lightX, settings.lightY, settings.lightZ]));
+
+        for (var i = 0; i < index; i += 3) 
+            gl.drawArrays(gl.TRIANGLES, 36+5+5+i, 3);
+
+        // plane
+        var matrix4 = computeMatrix(matrix, planeTranslation, 0, 0, 0);
+        matrix4 = m4_1.scale(matrix4, 1.5, 1.5, 1.5);
+        matrix4 = m4.multiply(matrix4, worldMatrix);
+        
+        gl.uniformMatrix4fv(worldLocation, false, matrix4);
+        
+        gl.drawArrays(gl.TRIANGLES, 36+5+5+index, 6);
+
+        requestAnimationFrame(drawScene);
+    }
+}
+
+// vertex
+function setGeometry(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 0,
+        0, 150, 0,
+        150, 0, 0,
+        0, 150, 0,
+        150, 150, 0,
+        150, 0, 0,
+
+        // 背面
+        0, 0, 150,
+        150, 0, 150,
+        0, 150, 150,
+        0, 150, 150,
+        150, 0, 150,
+        150, 150, 150,
+
+        // 顶面
+        0, 0, 0,
+        150, 0, 0,
+        150, 0, 150,
+        0, 0, 0,
+        150, 0, 150,
+        0, 0, 150,
+
+        // 右侧
+        150, 0, 0,
+        150, 150, 0,
+        150, 150, 150,
+        150, 0, 0,
+        150, 150, 150,
+        150, 0, 150,
+
+        // 底面
+        0, 150, 0,
+        0, 150, 150,
+        150, 150, 150,
+        0, 150, 0,
+        150, 150, 150,
+        150, 150, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 150,
+        0, 150, 150,
+        0, 0, 0,
+        0, 150, 150,
+        0, 150, 0,
+
+        // starInside
+        Math.cos((54 + 0 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 0 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 1 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 1 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 2 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 2 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 3 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 3 * 72) / 180 * Math.PI) * 60, 0,
+        Math.cos((54 + 4 * 72) / 180 * Math.PI) * 60, Math.sin((54 + 4 * 72) / 180 * Math.PI) * 60, 0,
+
+        // starOutside
+        Math.cos((18 + 0 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 0 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 1 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 1 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 2 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 2 * 144) / 180 * Math.PI) * 160, 0, 
+        Math.cos((18 + 3 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 3 * 144) / 180 * Math.PI) * 160, 0,
+        Math.cos((18 + 4 * 144) / 180 * Math.PI) * 160, Math.sin((18 + 4 * 144) / 180 * Math.PI) * 160, 0,
+    ]; 
+    var points = theTwo.concat(pointsArray);
+    var plane = [
+        0, 200, -500,
+        0, 200, 500,
+        2300, 200, -500,
+        2300, 200, -500,
+        0, 200, 500,
+        2300, 200, 500,
+    ]
+    points = points.concat(plane);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(points), gl.STATIC_DRAW);
+}
+
+// color
+function setColors(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 0,
+        0, 255, 0,
+        255, 0, 0,
+        0, 255, 0,
+        255, 255, 0,
+        255, 0, 0,
+
+        // 背面
+        0, 0, 255,
+        255, 0, 255,
+        0, 255, 255,
+        0, 255, 255,
+        255, 0, 255,
+        255, 255, 255,
+
+        // 顶面
+        0, 0, 0,
+        255, 0, 0,
+        255, 0, 255,
+        0, 0, 0,
+        255, 0, 255,
+        0, 0, 255,
+
+        // 右侧
+        255, 0, 0,
+        255, 255, 0,
+        255, 255, 255,
+        255, 0, 0,
+        255, 255, 255,
+        255, 0, 255,
+
+        // 底面
+        0, 255, 0,
+        0, 255, 255,
+        255, 255, 255,
+        0, 255, 0,
+        255, 255, 255,
+        255, 255, 0,
+
+        // 左侧
+        0, 0, 0,
+        0, 0, 255,
+        0, 255, 255,
+        0, 0, 0,
+        0, 255, 255,
+        0, 255, 0,
+
+        // starInside
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+        255, 255, 0,
+
+        // starOutside
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0, 0,
+    ];
+    var color = theTwo.concat(colorArray);
+    var plane = [
+        0, 0, 100,
+        0, 0, 100,
+        0, 0, 100,
+        0, 0, 100,
+        0, 0, 100,
+        0, 0, 100,
+    ];
+    color = color.concat(plane);
+    gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(color), gl.STATIC_DRAW);
+}
+
+// normal
+function setNormals(gl) {
+    var theTwo = [
+        // 正面
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+
+        // 背面
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+
+        // 顶面
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+
+        // 右侧
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+
+        // 底面
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+
+        // 左侧
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+        1, 0, 0,
+
+        // starInside
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+        0, 0, -1,
+
+        // starOutside
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+    ];
+    var normal = theTwo.concat(normalsArray);
+    var plane = [
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+        0, -1, 0,
+    ]
+    normal = normal.concat(plane);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normal), gl.STATIC_DRAW);
+}
+
+function triangle(a, b, c) {
+    pointsArray.push(a[0] * 20, a[1] * 20, a[2] * 20);
+    pointsArray.push(b[0] * 20, b[1] * 20, b[2] * 20);
+    pointsArray.push(c[0] * 20, c[1] * 20, c[2] * 20);
+
+    normalsArray.push(a[0] * 20, a[1] * 20, a[2] * 20);
+    normalsArray.push(b[0] * 20, b[1] * 20, b[2] * 20);
+    normalsArray.push(c[0] * 20, c[1] * 20, c[2] * 20);
+
+    // black
+    colorArray.push(0, 0, 0);
+    colorArray.push(0, 0, 0);
+    colorArray.push(0, 0, 0);
+
+    index += 3;
+}
+
+function divideTriangle(a, b, c, count) {
+    if ( count > 0 ) {
+
+        var ab = mix( a, b, 0.5);
+        var ac = mix( a, c, 0.5);
+        var bc = mix( b, c, 0.5);
+
+        ab = normalize(ab, true);
+        ac = normalize(ac, true);
+        bc = normalize(bc, true);
+
+        divideTriangle( a, ab, ac, count - 1 );
+        divideTriangle( ab, b, bc, count - 1 );
+        divideTriangle( bc, c, ac, count - 1 );
+        divideTriangle( ab, bc, ac, count - 1 );
+    }
+    else {
+        triangle( a, b, c );
+    }
+}
+
+function tetrahedron(a, b, c, d, n) {
+    divideTriangle(a, b, c, n);
+    divideTriangle(d, c, b, n);
+    divideTriangle(a, d, b, n);
+    divideTriangle(a, c, d, n);
+}
+
+main();
+</script>
