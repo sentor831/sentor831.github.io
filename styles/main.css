@@ -1,0 +1,58 @@
+:root {
+    --primary: #3b82f6;
+    --gray-100: #f3f4f6;
+    --gray-800: #1f2937;
+}
+
+body {
+    font-family: system-ui, sans-serif;
+    line-height: 1.6;
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 2rem;
+    background: var(--gray-100);
+    color: var(--gray-800);
+}
+
+.projects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin: 3rem 0;
+}
+
+.card {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1);
+}
+
+.card h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+}
+
+.card p {
+    margin: 0 0 1.5rem 0;
+    opacity: 0.7;
+}
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.link:hover {
+    text-decoration: underline;
+}
