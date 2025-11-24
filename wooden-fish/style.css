@@ -1,0 +1,205 @@
+/* ===== CSS 重置和基础设置 ===== */
+
+/* 通用选择器：重置所有元素的外边距和内边距 */
+* {
+    margin: 0;          /* 清除默认外边距 */
+    padding: 0;         /* 清除默认内边距 */
+    box-sizing: border-box; /* 设置盒模型：宽度和高度包含边框和内边距 */
+}
+
+/* ===== 页面主体样式 ===== */
+body {
+    font-family: 'Microsoft YaHei', sans-serif; /* 设置字体：微软雅黑为首选，无衬线字体为备选 */
+    background: linear-gradient(135deg, #8B4513, #D2691E); /* 135度棕色渐变背景 */
+    min-height: 100vh;  /* 最小高度为整个视口高度 */
+    display: flex;       /* 使用弹性布局 */
+    flex-direction: column; /* 垂直方向排列子元素 */
+    align-items: center;    /* 水平居中 */
+    justify-content: center; /* 垂直居中 */
+    color: #FFF;        /* 文字颜色为白色 */
+    text-align: center; /* 文字居中对齐 */
+    padding: 20px;      /* 内边距20像素 */
+}
+
+/* ===== 主容器样式 ===== */
+.container {
+    background: rgba(255, 255, 255, 0.1); /* 半透明白色背景 */
+    backdrop-filter: blur(10px); /* 背景模糊效果，创造毛玻璃效果 */
+    border-radius: 20px;    /* 圆角边框，20像素半径 */
+    padding: 40px;      /* 内边距40像素 */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3); /* 阴影：X偏移0，Y偏移8px，模糊32px，黑色半透明 */
+    border: 1px solid rgba(255, 255, 255, 0.2); /* 半透明白色边框 */
+}
+
+/* ===== 主标题样式 ===== */
+h1 {
+    font-size: 2.5rem;  /* 字体大小2.5rem（相对于根元素） */
+    margin-bottom: 10px; /* 下边距10像素 */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* 文字阴影：右偏移2px，下偏移2px，模糊4px，半透明黑色 */
+}
+
+/* ===== 副标题样式 ===== */
+.subtitle {
+    font-size: 1.2rem;  /* 字体大小1.2rem */
+    margin-bottom: 30px; /* 下边距30像素 */
+    opacity: 0.9;       /* 不透明度90%，创造轻微透明效果 */
+}
+
+/* ===== 功德计数器容器 ===== */
+.merit-counter {
+    background: rgba(255, 255, 255, 0.15); /* 半透明白色背景 */
+    padding: 20px;      /* 内边距20像素 */
+    border-radius: 15px; /* 圆角边框，15像素半径 */
+    margin-bottom: 30px; /* 下边距30像素 */
+    border: 2px solid rgba(255, 255, 255, 0.3); /* 半透明白色边框，2像素宽度 */
+}
+
+/* ===== 功德文字标签样式 ===== */
+.merit-label {
+    font-size: 1.2rem;  /* 字体大小1.2rem */
+    margin-bottom: 8px;  /* 下边距8像素 */
+    opacity: 0.9;       /* 不透明度90% */
+}
+
+/* ===== 功德数字样式 ===== */
+.merit-number {
+    font-size: 3rem;    /* 大字体：3rem */
+    font-weight: bold;  /* 粗体字 */
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* 文字阴影效果 */
+    color: #FFD700;     /* 金色文字颜色 */
+}
+
+/* ===== 木鱼主体样式 ===== */
+.wooden-fish {
+    width: 220px;       /* 宽度220像素 */
+    height: 220px;      /* 高度220像素，创造正方形 */
+    background: radial-gradient(circle at 30% 30%, #8B4513, #5D4037); /* 径向渐变：圆心在30% 30%位置，从浅棕到深棕 */
+    border-radius: 50%; /* 圆形：50%边框半径 */
+    margin: 0 auto 40px; /* 外边距：上下0，左右自动（水平居中），下边40px */
+    cursor: pointer;    /* 鼠标悬停时显示手型指针 */
+    position: relative; /* 相对定位，为子元素定位做准备 */
+    box-shadow: 
+        inset 0 -15px 30px rgba(0, 0, 0, 0.6), /* 内阴影：创造凹陷效果 */
+        0 15px 40px rgba(0, 0, 0, 0.5); /* 外阴影：创造立体悬浮效果 */
+    transition: all 0.1s ease; /* 所有属性变化都有0.1秒的缓动过渡 */
+    border: 12px solid #5D4037; /* 深棕色边框，12像素宽度 */
+    display: flex;      /* 弹性布局 */
+    align-items: center; /* 垂直居中子元素 */
+    justify-content: center; /* 水平居中子元素 */
+}
+
+/* ===== 木鱼点击状态样式 ===== */
+.wooden-fish:active {
+    transform: scale(0.95); /* 点击时缩小到95%大小 */
+    box-shadow: 
+        inset 0 -8px 20px rgba(0, 0, 0, 0.6), /* 点击时减少阴影强度 */
+        0 8px 25px rgba(0, 0, 0, 0.5); /* 点击时减少外阴影 */
+}
+
+/* ===== 木鱼内部圆形装饰 ===== */
+.fish-inner {
+    width: 60px;        /* 宽度60像素 */
+    height: 60px;       /* 高度60像素 */
+    background: radial-gradient(circle, rgba(139, 69, 19, 0.8), transparent); /* 半透明径向渐变 */
+    border-radius: 50%; /* 圆形 */
+    border: 3px solid rgba(255, 215, 0, 0.3); /* 半透明金色边框 */
+    position: relative; /* 相对定位，为伪元素定位做准备 */
+}
+
+/* ===== 木鱼中心的卍字符号 ===== */
+.fish-inner::before {
+    content: "卍";      /* 伪元素内容：卍字符 */
+    position: absolute; /* 绝对定位 */
+    top: 50%;          /* 距离顶部50% */
+    left: 50%;         /* 距离左侧50% */
+    transform: translate(-50%, -50%); /* 平移自身宽高的50%，实现完美居中 */
+    font-size: 2rem;   /* 字体大小2rem */
+    color: rgba(255, 255, 255, 0.4); /* 半透明白色 */
+}
+
+/* ===== 操作说明文字样式 ===== */
+.instructions {
+    margin-top: 20px;  /* 上边距20像素 */
+    font-size: 1rem;   /* 字体大小1rem */
+    opacity: 0.8;      /* 不透明度80% */
+}
+
+/* ===== 返回首页链接样式 ===== */
+.back-link {
+    margin-top: 30px;  /* 上边距30像素 */
+    color: #FFF;       /* 白色文字 */
+    text-decoration: none; /* 去除下划线 */
+    padding: 12px 24px; /* 内边距：上下12px，左右24px */
+    background: rgba(255, 255, 255, 0.2); /* 半透明白色背景 */
+    border-radius: 10px; /* 圆角边框，10像素半径 */
+    transition: all 0.3s ease; /* 所有属性变化有0.3秒缓动过渡 */
+    border: 1px solid rgba(255, 255, 255, 0.3); /* 半透明白色边框 */
+}
+
+/* ===== 返回链接悬停状态 ===== */
+.back-link:hover {
+    background: rgba(255, 255, 255, 0.3); /* 悬停时背景更亮 */
+    transform: translateY(-2px); /* 悬停时向上移动2像素，创造浮动效果 */
+}
+
+/* ===== 点击涟漪效果 ===== */
+.click-effect {
+    position: absolute; /* 绝对定位 */
+    width: 60px;       /* 宽度60像素 */
+    height: 60px;      /* 高度60像素 */
+    background: radial-gradient(circle, rgba(255,215,0,0.6) 0%, transparent 70%); /* 金色径向渐变 */
+    border-radius: 50%; /* 圆形 */
+    pointer-events: none; /* 防止干扰鼠标事件 */
+    animation: ripple 0.6s ease-out; /* 应用涟漪动画，持续0.6秒，缓出效果 */
+}
+
+/* ===== 涟漪动画关键帧 ===== */
+@keyframes ripple {
+    from {
+        transform: scale(0); /* 动画开始：缩放为0（不可见） */
+        opacity: 1;         /* 完全不透明 */
+    }
+    to {
+        transform: scale(3); /* 动画结束：放大到3倍 */
+        opacity: 0;         /* 完全透明 */
+    }
+}
+
+/* ===== 功德数字跳动动画类 ===== */
+.merit-pop {
+    animation: pop 0.3s ease-out; /* 应用pop动画，持续0.3秒，缓出效果 */
+}
+
+/* ===== 数字跳动动画关键帧 ===== */
+@keyframes pop {
+    0% {
+        transform: scale(1); /* 初始状态：正常大小 */
+    }
+    50% {
+        transform: scale(1.2); /* 中间状态：放大到1.2倍 */
+        color: #FFFF00;     /* 变为亮黄色 */
+    }
+    100% {
+        transform: scale(1); /* 结束状态：恢复正常大小 */
+    }
+}
+
+/* ===== 响应式设计：平板和手机设备 ===== */
+@media (max-width: 768px) {
+    .container {
+        padding: 30px 20px; /* 在小屏幕上减少内边距 */
+    }
+    
+    .wooden-fish {
+        width: 180px;   /* 缩小木鱼尺寸 */
+        height: 180px;  /* 保持宽高相等 */
+    }
+    
+    .merit-number {
+        font-size: 2.5rem; /* 减小功德数字大小 */
+    }
+    
+    h1 {
+        font-size: 2rem; /* 减小主标题大小 */
+    }
+}
